@@ -1,0 +1,5 @@
+# Client SDK agent guide
+
+Use Simplified Chinese. Keep construction inert and lifecycle explicit. Preserve bounded series, payloads, queues, deadlines, exact unacknowledged retry bytes and complete ACK validation. Counter is cumulative and gauge is the latest finite value. Separate ingest credentials from account/management authentication. Public browser/game clients need an authenticated business backend relay; never distribute permanent server credentials.
+
+Use only synthetic test credentials and loopback/example URLs in source and documentation. Never print endpoint credentials, tokens or response bodies in diagnostics. Run commands in this module. Keep generated packages, bin/obj, dist, target, node_modules and local configuration ignored. CI runs only for version tags or manual dispatch. Source checks, package installation, registry availability and production acceptance are separate claims.

@@ -1,0 +1,14 @@
+{
+  "name": "metrics233-client-sdk-typescript",
+  "version": "0.1.0",
+  "description": "Bounded explicit-lifecycle metrics233 reporting client for TypeScript",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:neko233-com/metrics233-client-sdk-typescript",
+  "engines": { "node": ">=18" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "npm run build && node --test test/*.test.mjs", "prepack": "npm run build" },
+  "devDependencies": { "typescript": "5.9.3" }
+}
