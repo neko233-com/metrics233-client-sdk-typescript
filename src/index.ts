@@ -8,7 +8,7 @@ export class MetricsError extends Error {
   constructor(public readonly code: string, public readonly status?: number) { super(`metrics233: ${code}${status ? ` (${status})` : ""}`); this.name = "MetricsError"; }
 }
 type Entry = { sample: Sample; kind: "counter" | "gauge" | "record"; version: number; dirty: boolean };
-type Pending = { body: string; count: number; entries: [string, number][] };
+type Pending = { body: string; count: number; rawCount: number; entries: [string, number][] };
 type Core = {
   url: string; token: string; maxSeries: number; maxPending: number; batchSize: number; timeout: number; retries: number;
   series: Map<string, Entry>; kinds: Map<string, string>; records: Sample[]; pending: Pending[];
@@ -60,7 +60,7 @@ export class Metrics233 {
     const timestamp = input.timestamp === undefined || input.timestamp === 0 ? Date.now() : input.timestamp;
     if (!Number.isSafeInteger(timestamp) || timestamp < 0 || timestamp > Date.now() + 300000) throw new MetricsError("invalid_timestamp");
     if (!before && core.series.size >= core.maxSeries) throw new MetricsError("series_limit");
-    if (kind === "record" && core.records.length + core.pending.reduce((n, p) => n + p.count, 0) >= core.maxPending) throw new MetricsError("pending_limit");
+    if (kind === "record" && core.records.length + core.pending.reduce((n, p) => n + p.rawCount, 0) >= core.maxPending) throw new MetricsError("pending_limit");
     const value = kind === "counter" ? (before?.sample.value || 0) + input.value : input.value;
     if (!Number.isFinite(value)) throw new MetricsError("counter_overflow");
     const sample = { name: input.name, value, labels: ls, timestamp };
@@ -69,7 +69,7 @@ export class Metrics233 {
     if (kind === "record") core.records.push(sample);
     return this;
   }
-  stats() { const c = this.#core; return { state: c.state, series: c.series.size, pendingRecords: c.records.length, pendingBatches: c.pending.length, accepted: c.accepted, lastError: c.lastError }; }
+  stats() { const c = this.#core; return { state: c.state, series: c.series.size, pendingRecords: c.records.length + c.pending.reduce((n, p) => n + p.rawCount, 0), pendingBatches: c.pending.length, accepted: c.accepted, lastError: c.lastError }; }
   start(intervalMs = 15000): this {
     const c = this.#core; integer(intervalMs, 100, 86400000);
     if (c.state !== "open") throw new MetricsError("closed"); if (c.interval !== undefined) throw new MetricsError("already_running"); c.interval = intervalMs;
@@ -92,10 +92,10 @@ export class Metrics233 {
     const c = this.#core; if (c.pending.length) return;
     const items: { sample: Sample; entry?: [string, number] }[] = [];
     for (const [key, entry] of c.series) if (entry.dirty) items.push({ sample: { ...entry.sample, timestamp: Date.now() }, entry: [key, entry.version] });
-    items.push(...c.records.map(sample => ({ sample })));
-    let encoded: string[] = [], entries: [string, number][] = [], size = 16;
-    const finish = () => { if (encoded.length) c.pending.push({ body: `{"samples":[${encoded.join(",")}]}`, count: encoded.length, entries }); encoded = []; entries = []; size = 16; };
-    for (const item of items) { const json = JSON.stringify(item.sample), length = bytes(json) + 1; if (encoded.length >= c.batchSize || size + length > 4 * 1024 * 1024) finish(); encoded.push(json); size += length; if (item.entry) entries.push(item.entry); }
+    for (const sample of c.records) items.push({ sample });
+    let encoded: string[] = [], entries: [string, number][] = [], size = 16, rawCount = 0;
+    const finish = () => { if (encoded.length) c.pending.push({ body: `{"samples":[${encoded.join(",")}]}`, count: encoded.length, rawCount, entries }); encoded = []; entries = []; size = 16; rawCount = 0; };
+    for (const item of items) { const json = JSON.stringify(item.sample), length = bytes(json) + 1; if (encoded.length >= c.batchSize || size + length > 4 * 1024 * 1024) finish(); encoded.push(json); size += length; if (item.entry) entries.push(item.entry); else rawCount++; }
     finish(); c.records = [];
   }
   async #send(): Promise<void> {

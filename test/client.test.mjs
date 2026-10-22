@@ -80,3 +80,12 @@ test('oversized acknowledgement does not dequeue the batch', async () => {
     await assert.rejects(m.flush(), error => error.code === 'invalid_ack'); assert.equal(m.stats().pendingBatches, 1);
   }, (_req, res) => res.end('x'.repeat(65537)));
 });
+
+test('raw-record capacity includes in-flight records without counting coalesced gauges', async () => {
+  await fixture(async endpoint => {
+    const m = new Metrics233({ endpoint, token, allowHttpLoopback: true, maxPending: 1 });
+    m.gauge('online', 1); await assert.rejects(m.flush(), error => error.status === 401);
+    m.record({ name: 'raw', value: 1 }); assert.equal(m.stats().pendingRecords, 1);
+    assert.throws(() => m.record({ name: 'raw', value: 2 }), /pending_limit/);
+  }, (_req, res) => { res.statusCode = 401; res.end(); });
+});
